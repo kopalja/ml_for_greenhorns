@@ -8,6 +8,10 @@ import sklearn.datasets
 import sklearn.model_selection
 import sklearn.pipeline
 import sklearn.preprocessing
+from sklearn.compose import ColumnTransformer
+
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
 
 
 
@@ -17,6 +21,19 @@ def is_int_column(column):
         if not (cell).is_integer():
             return False
     return True
+
+
+def change_features_order(inpt):
+    order = []
+    for i in range(inpt.shape[1]):
+        if is_int_column(inpt[:, i]):
+            order.append(i)
+    for i in range(inpt.shape[1]):
+        if is_int_column(inpt[:, i]) == False:
+            order.append(i)
+    return inpt[:, np.array(order)]
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -49,28 +66,38 @@ if __name__ == "__main__":
     # In the output, there should be first all the one-hot categorical features,
     # and then the real-valued features. To process different dataset columns
     # differently, you can use `sklearn.compose.ColumnTransformer`.
-    for data in [train_data ,test_data]:
-        for i in range(data.shape[1]):
+
+    train_data = change_features_order(train_data)
+    test_data = change_features_order(test_data)
+
+    # define column transformers
+    transformers = [] 
+    for i in range(train_data.shape[1]):
+        if is_int_column(train_data[:, i]):
+            transformer = sklearn.preprocessing.OneHotEncoder(sparse=False)
+        else:
+            transformer = sklearn.preprocessing.StandardScaler()
+        transformers.append(("column {0}".format(i), transformer, [i]))
 
 
-            if is_int_column(data[:, i]):
-                print(data[:, i].shape)
-                x = data[:, i].reshape((253, 1))
-                print(x.shape)
-                one = sklearn.preprocessing.OneHotEncoder(sparse=False, categories='auto')
-                pipeline=  sklearn.pipeline.Pipeline([('one`', one)])
-                y = pipeline['one'].fit_transform(x)
-                print(y.shape)
-                exit()
-                
-            
+    pipeline = sklearn.pipeline.Pipeline(steps = [
+        ('columns', ColumnTransformer(transformers)), 
+        ('polynomial', sklearn.preprocessing.PolynomialFeatures(2, include_bias=False))
+    ])
 
-    exit()
+    train_data = pipeline.fit_transform(train_data)
+    test_data = pipeline.transform(test_data)
+
+
+
+
     # TODO: Generate polynomial features of order 2 from the current features.
     # If the input values are [a, b, c, d], you should generate
     # [a^2, ab, ac, ad, b^2, bc, bd, c^2, cd, d^2]. You can generate such polynomial
     # features either manually, or using
     # `sklearn.preprocess.PolynomialFeatures(2, include_bias=False)`.
+    # train_data = pol.fit_transform(train_output)
+    # test_data = pol.transform(test_output)
 
     # TODO: You can wrap all the feature processing steps into one transformer
     # by using `sklearn.pipeline.Pipeline`. Although not strictly needed, it is
