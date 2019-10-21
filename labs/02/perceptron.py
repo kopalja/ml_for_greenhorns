@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import sys
 
@@ -23,7 +27,8 @@ if __name__ == "__main__":
     target = 2 * target - 1
 
     # TODO: Append a constant feature with value 1 to the end of every input data
-
+    data = np.append(data, np.ones((data.shape[0], 1)), axis=1)
+    
     # Generate initial perceptron weights
     weights = np.random.uniform(size=data.shape[1])
 
@@ -39,5 +44,10 @@ if __name__ == "__main__":
         # TODO: Implement the perceptron algorithm, notably one iteration
         # over the data. If the data is correctly separated, set `done=True`,
         # otherwise set `done=False`.
+        done = True
+        for x, y in zip(data, target):
+            if y * np.dot(weights, x) <= 0:
+                weights += y * x 
+                done = False
 
     print(" ".join("{:.2f}".format(weight) for weight in weights))
