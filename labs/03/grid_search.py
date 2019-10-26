@@ -43,5 +43,19 @@ if __name__ == "__main__":
     #
     # The easiest way is to use `sklearn.model_selection.GridSearchCV`.
 
-    test_accuracy = ...
+    pipeline = sklearn.pipeline.Pipeline(steps = [
+        ('MinMaxScaler', sklearn.preprocessing.MinMaxScaler()),
+        ('Polynomial', sklearn.preprocessing.PolynomialFeatures()),
+        ('Regression', sklearn.linear_model.LogisticRegression(multi_class="multinomial"))
+    ])
+
+    #print(pipeline.get_params().keys()
+    parameters = { 
+        'Polynomial__degree' : [1, 2], 
+        'Regression__C': [0.01, 1, 100],
+        'Regression__solver': ('lbfgs', 'sag')
+    }
+    grid = sklearn.model_selection.GridSearchCV(pipeline, parameters, cv = 5)
+    grid.fit(train_data, train_target)
+    test_accuracy = grid.score(test_data, test_target)
     print("{:.2f}".format(100 * test_accuracy))
