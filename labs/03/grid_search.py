@@ -57,9 +57,9 @@ if __name__ == "__main__":
     parameters = { 
         'Polynomial__degree' : [1, 2], 
         'Regression__C': [0.01, 1, 100],
-        'Regression__solver': ('lbfgs', 'sag')
+        'Regression__solver': ['sag', 'lbfgs']
     }
-    grid = sklearn.model_selection.GridSearchCV(pipeline, parameters, cv = 5)
+    grid = sklearn.model_selection.GridSearchCV(pipeline, parameters, scoring='accuracy', refit=True, cv=sklearn.model_selection.StratifiedKFold(5))
     grid.fit(train_data, train_target)
     test_accuracy = grid.score(test_data, test_target)
     print("{:.2f}".format(100 * test_accuracy))
