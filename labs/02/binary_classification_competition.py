@@ -1,71 +1,141 @@
 #!/usr/bin/env python3
+
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import lzma
 import pickle
 import os
-import urllib.request
-import sys
 
 import numpy as np
 import pandas as pd
 
-class Dataset:
-    def __init__(self,
-                 name="binary_classification_competition.train.csv.xz",
-                 url="https://ufal.mff.cuni.cz/~straka/courses/npfl129/1920/datasets/"):
-        if not os.path.exists(name):
-            print("Downloading dataset {}...".format(name), file=sys.stderr)
-            urllib.request.urlretrieve(url + name, filename=name)
+import sklearn.preprocessing
+import sklearn.linear_model
+import sklearn.ensemble
+from sklearn.compose import ColumnTransformer
 
-        # Load the dataset and split it into `train_target` (column Target)
-        # and `train_data` (all other columns).
-        dataset = pd.read_csv(name)
-        self.data, self.target = dataset.drop("Target", axis=1), dataset["Target"]
-
+from binary_classification_dataset import Dataset
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model_path", default="binary_classification_competition.model", type=str, help="Model path")
+parser.add_argument("--model_path_lr", default="binary_classification_competition-lr.model", type=str, help="Logistic regregression model path")
+parser.add_argument("--model_path_lr_pca", default="binary_classification_competition-lr-pca.model", type=str, help="LR w/ PCA model path")
+parser.add_argument("--model_path_svm", default="binary_classification_competition-svm.model", type=str, help="SVM model path")
+parser.add_argument("--model_path_rf", default="binary_classification_competition-rf.model", type=str, help="Random forest model path")
+parser.add_argument("--model_path_vote", default="binary_classification_competition-vote.model", type=str, help="Voting model path")
+parser.add_argument("--model_path_et", default="binary_classification_competition-et.model", type=str, help="ExtraTrees model path")
+parser.add_argument("--model_path_pre", default="binary_classification_competition-pre.model", type=str, help="Preprocessing model path")
+
 parser.add_argument("--seed", default=42, type=int, help="Random seed")
 
+def get_transformer(data):
+    # Education provides the same information as Education-num so we drop one of them
+    onehot_features = ['Workclass', 'Marital-status', 'Occupation', 'Race', 'Native-country', 'Sex', 'Relationship']
+    
+    transformers = []
+    for (i, name) in enumerate(data.columns):
+        if name in onehot_features:
+            transformer = sklearn.preprocessing.OneHotEncoder(sparse=False, handle_unknown='ignore')
+        else:
+            transformer = sklearn.preprocessing.StandardScaler()
+        transformers.append((name, transformer, [i]))
+
+    return ColumnTransformer(transformers)
+
+def fit_svm(data, target):
+    svm = sklearn.svm.LinearSVC(dual=False, max_iter=20000)
+    parameters_svm = {
+        'penalty': ['l1', 'l2'],
+        'C': [0.1, 0.3, 1, 30, 100, 300],
+    }
+
+    grid_svm = sklearn.model_selection.GridSearchCV(svm, parameters_svm, n_jobs=-1, cv=5)
+    grid_svm.fit(data, target)
+    print(grid_svm.best_score_)
+    print(grid_svm.best_params_)
+
+    with lzma.open(args.model_path_svm, "wb") as model_file:
+        pickle.dump(grid_svm.best_estimator_, model_file)
+
+def fit_lr_pca(data, target):
+    pca = sklearn.decomposition.PCA(0.99)
+    data_pca = pd.DataFrame(data=pca.fit_transform(train.data))
+
+    lr = sklearn.linear_model.LogisticRegression(solver='liblinear')
+
+    d_lr = 1
+
+    parameters_lr_pca = {
+        'penalty': ['l1', 'l2'],
+        'C': [0.4, 0.8, 1.6, 3.2],
+    }
+
+    grid_lr = sklearn.model_selection.GridSearchCV(lr, parameters_lr_pca, n_jobs=-1, cv=5)
+    grid_lr.fit(data_pca.iloc[::d_lr], train.target[::d_lr])
+    print(grid_lr.best_score_)
+    print(grid_lr.best_params_)
+
+def fit_lr(data, target):
+    lr = sklearn.linear_model.LogisticRegression()
+    
+    parameters_lr = {
+        'penalty': ['l1', 'l2'],
+        'C': [0.45, 0.7, 1, 1.5, 2.25, 3],
+    }
+
+    grid_lr = sklearn.model_selection.GridSearchCV(lr, parameters_lr, n_jobs=-1, cv=5)
+    grid_lr.fit(train.data.iloc[::d_lr], train.target[::d_lr])
+    print(grid_lr.best_score_)
+    print(grid_lr.best_params_)
+
+    with lzma.open(args.model_path_lr, "wb") as model_file:
+        pickle.dump(grid_lr.best_estimator_, model_file)
+
+def fit_rf(data, target):
+    rf = sklearn.ensemble.RandomForestClassifier(501)
+
+    parameters_rf = {
+        'max_depth': [None, 10, 20, 30],
+        'min_samples_split': [11, 14, 17],
+    }
+
+    grid_rf = sklearn.model_selection.GridSearchCV(rf, parameters_rf, refit=True, n_jobs = -1, cv=5)
+    grid_rf.fit(train.data, train.target)
+    print(grid_rf.best_score_)
+    print(grid_rf.best_params_)
+
+    with lzma.open(args.model_path_rf, "wb") as model_file:
+        pickle.dump(grid_rf.best_estimator_, model_file)
+
+def fit_et(data, target):
+    et = sklearn.ensemble.ExtraTreesClassifier(501)
+    parameters_et = {
+        'max_depth': [None, 10, 20, 30],
+        'min_samples_split': [11, 14, 17],
+    }
+
+    grid_et = sklearn.model_selection.GridSearchCV(et, parameters_et, refit=True, n_jobs = -1, cv=5)
+    grid_et.fit(train.data, train.target)
+    print(grid_et.best_score_)
+    print(grid_et.best_params_)
+
+    with lzma.open(args.model_path_et, "wb") as model_file:
+        pickle.dump(grid_et.best_estimator_, model_file)
+
 if __name__ == "__main__":
-    args = parser.parse_args()
+    args = parser.parse_args([])
 
     # Set random seed
     np.random.seed(args.seed)
 
     # Load the dataset, downloading it if required
     train = Dataset()
+    train.data.drop('Education', axis=1, inplace=True)
+    transformer = get_transformer(train.data)
 
-    # Note that `train.data` and `train.target` are a `pandas.DataFrame`.
-    # It is similar to a Numpy array, but columns have names and types.
-    # You can get column types using `train_data.dtypes`; note that
-    # strings are actually encoded as `object`s.
+    train.data = transformer.fit_transform(train.data)
+    with lzma.open(args.model_path_pre, "wb") as model_file:
+        pickle.dump(transformer, model_file)
 
-    # TODO: Train the model.
-
-    # TODO: The trained model needs to be saved. All sklearn models can
-    # be serialized and deserialized using the standard `pickle` module.
-    # Additionally, we can also compress the model.
-    #
-    # To save a model, open a target file for binary access, and use
-    # `pickle.dump` to save the model to the opened file:
-    # with lzma.open(args.model_path, "wb") as model_file:
-    #       pickle.dump(model, model_file)
-
-# The `recodex_predict` is called during ReCodEx evaluation (there can be
-# several Python sources in the submission, but exactly one should contain
-# a `recodex_predict` method).
-def recodex_predict(data):
-    # The `data` is a pandas.DataFrame containt test set input.
-
-    args = parser.parse_args([])
-
-    # TODO: Predict target values for the given data.
-    #
-    # You should probably start by loading a model. Start by opening the model
-    # file for binary read access and then use `pickle.load` to deserialize the
-    # model from the stored binary data:
-    # with lzma.open(args.model_path, "rb") as model_file:
-    #     model = pickle.load(model_file)
-
-    # TODO: Return the predictions as a Numpy array.
+    #fit_rf(train.data, train.target)
