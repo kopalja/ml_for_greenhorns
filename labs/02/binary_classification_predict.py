@@ -30,10 +30,8 @@ def recodex_predict(data):
     # You should probably start by loading a model. Start by opening the model
     # file for binary read access and then use `pickle.load` to deserialize the
     # model from the stored binary data:
-
     with lzma.open(args.model_path_rf, "rb") as model_file:
         model_rf = pickle.load(model_file)
-
     return model_rf.predict(data)
 
 if __name__=='__main__':

@@ -19,7 +19,7 @@ from sklearn.compose import ColumnTransformer
 
 def is_int_column(column):
     for cell in column:
-        if not (cell).is_integer():
+        if not cell.is_integer():
             return False
     return True
 
