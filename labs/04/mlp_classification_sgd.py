@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import sys
 
@@ -7,6 +11,23 @@ import numpy as np
 import sklearn.datasets
 import sklearn.metrics
 import sklearn.model_selection
+
+def relu(x):
+    return np.maximum(0, x)
+
+def softmax(z):
+    out = np.exp(z - np.max(z))
+    return out / np.sum(out)
+
+def one_hot_encoding(x, classes):
+    one_hot = np.zeros(classes)
+    one_hot[x] = 1
+    return one_hot
+
+def d_relu(d_init, out):
+    d = np.array(d_init, copy = True)
+    d[out < 0] = 0.
+    return d
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -52,9 +73,31 @@ if __name__ == "__main__":
         # in softmax can easily overflow. To avoid it, you can use the fact that
         # softmax(z) = softmax(z + any_constant) and compute softmax(z) = softmax(z - maximum_of_z).
         # That way we only exponentiate values which are non-positive, and overflow does not occur.
+        y_hidden = relu(inputs @ weights[0])
+        y_out = softmax(y_hidden @ weights[1])
+
+        return y_hidden, y_out
 
     for iteration in range(args.iterations):
+        train_correct = 0
         permutation = np.random.permutation(train_data.shape[0])
+        grad = [np.zeros_like(weights[0]), np.zeros_like(weights[1])]
+        for i, perm in enumerate(permutation):
+            inp, target = train_data[perm], train_target[perm]
+            y_hidden, y_out = forward(inp)
+            label = one_hot_encoding(target, args.classes)
+            delta = label - y_out
+            g = y_hidden.reshape(-1, 1) @ delta.reshape(1, -1)
+            grad[1] += g
+            delta = (delta @ weights[1].T)
+            g = (inp.reshape(-1, 1) @ delta.reshape(1, -1)) * (y_hidden > 0)
+            grad[0] += g
+            if (i + 1) % args.batch_size == 0:
+                weights[0] += args.learning_rate * grad[0] / args.batch_size
+                weights[1] += args.learning_rate * grad[1] / args.batch_size
+                grad = [np.zeros_like(weights[0]), np.zeros_like(weights[1])]
+                
+                
 
         # TODO: Process the data in the order of `permutation`.
         # For every `args.batch_size`, average their gradient, and update the weights.
@@ -74,8 +117,12 @@ if __name__ == "__main__":
 
         # TODO: After the SGD iteration, measure the accuracy for both the
         # train test and the test set and print it in percentages.
+        predictions = np.asarray([forward(x)[1] for x in test_data])
+        test_acc = np.mean(predictions.argmax(axis=1) == test_target)
+        predictions = np.asarray([forward(x)[1] for x in train_data])
+        train_acc = np.mean(predictions.argmax(axis=1) == train_target)
         print("After iteration {}: train acc {:.1f}%, test acc {:.1f}%".format(
             iteration + 1,
-            100 * # Training accuracy,
-            100 * # Test accuracy,
+            100 * train_acc,
+            100 * test_acc,
         ))
