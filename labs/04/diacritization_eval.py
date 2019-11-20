@@ -3,8 +3,8 @@ import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("gold", type=str, help="Gold data")
-    parser.add_argument("system", type=str, help="System data")
+    parser.add_argument("--gold", type=str, help="Gold data")
+    parser.add_argument("--system", type=str, help="System data")
     args = parser.parse_args()
 
     with open(args.gold, "r", encoding="utf-8") as gold_file:
