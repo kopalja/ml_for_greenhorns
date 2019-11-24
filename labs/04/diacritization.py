@@ -8,7 +8,8 @@ import sys
 import sklearn.neural_network
 
 
-
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
 
 import numpy as np
 
@@ -44,32 +45,25 @@ parser.add_argument("--window", default=4, type=int, help="Random seed")
 
 class Encoder:
     def __init__(self, text, DIA_TO_NODIA):
-        self._DIA_TO_NODIA = DIA_TO_NODIA
-        self._all_dif = []
+        self._min = 1000
+        self._max = - self._min
         for ch in text:
-            code = ord(ch.lower())
-            if code not in self._all_dif:
-                self._all_dif.append(code)
-
-        self._map_from_code_to_id = {}
-        self._map_from_id_to_code = {}
-        for i, d in enumerate(self._all_dif):
-            self._map_from_code_to_id[d] = i
-            self._map_from_id_to_code[i] = d
+            code = ord(ch.lower().translate(DIA_TO_NODIA))
+            self._min = min(self._min, code)
+            self._max = max(self._max, code) 
+        self._size = self._max - self._min + 1
 
     def encode(self, x):
-        code = ord(x.lower())
-        if not code in self._all_dif:
+        x = ord(x)
+        if x < self._min or x > self._max:
             raise Exception('Unknown char to encode')
-        one_hot = np.zeros(len(self._all_dif))
-        one_hot[self._map_from_code_to_id[code]] = 1
+        one_hot = np.zeros(self._size)
+        one_hot[x - self._min] = 1
         return one_hot
-
-
 
 #########################################################################
 
-index_map = [400, 150, 150, 400, 400, 150, 150, 150, 150, 150, 150, 400, 150 ]
+index_map = [200, 100, 50, 120, 200, 50, 50, 100, 100, 50, 100, 200, 100 ]
 
 
 
@@ -80,8 +74,8 @@ class Net:
             hidden_layer_sizes=(index_map[index],),
             activation='relu',
             batch_size=50,
-            alpha=0.002,
-            max_iter=250,
+            alpha=0.005,
+            max_iter=200,
             verbose=True
         )
         self._inpts = []
@@ -134,8 +128,8 @@ class Model:
         left = list(text[index - self._args.window : index])
         right = list(text[index + 1 : index + self._args.window + 1])
 
-        left = [l.lower() for l in left]
-        right = [l.lower().translate(self._DIA_TO_NODIA) for l in right]
+        left = [l.translate(self._DIA_TO_NODIA) for l in left]
+        right = [l.translate(self._DIA_TO_NODIA) for l in right]
         left.reverse()
         space = False
         for i, t in enumerate(left):
@@ -154,43 +148,17 @@ class Model:
         return left + right
         
 
-    def _create_window2(self, r, text, index):
-        left = list(r[-self._args.window:])
-        right = list(text[index + 1 : index + self._args.window + 1])
-
-        left = [l.lower() for l in left]
-        right = [l.lower().translate(self._DIA_TO_NODIA) for l in right]
-        left.reverse()
-        space = False
-        for i, t in enumerate(left):
-            if t == ' ':
-                space = True
-            if space:
-                left[i] = ' '
-        left.reverse()
-
-        space = False
-        for i, t in enumerate(right):
-            if t == ' ':
-                space = True
-            if space:
-                right[i] = ' '
-        return left + right
-
     def train(self, text):
-
-        # create training samples
         for index, ch in enumerate(text):
             was_cap = ch.lower() != ch
             ch = ch.lower()
 
             if (ch in self._LETTERS_DIA or ch in self._LETTERS_NODIA) \
             and index >= self._args.window and index < len(text) - self._args.window:
-                #window = text[index - self._args.window : index] + text[index + 1 : index + self._args.window + 1]
+                window = text[index - self._args.window : index] + text[index + 1 : index + self._args.window + 1]
                 #self._model[ch.translate(self._DIA_TO_NODIA)].add_sample(window, ch)
                 self._model[ch.translate(self._DIA_TO_NODIA)].add_sample(self._create_window(text, index), ch)
 
-        # train
         for _, model in self._model.items():
             model.train()
 
@@ -203,7 +171,7 @@ class Model:
             if (ch in self._LETTERS_DIA or ch in self._LETTERS_NODIA) \
             and index >= self._args.window and index < len(text) - self._args.window:
                 #window = text[index - self._args.window : index] + text[index + 1 : index + self._args.window + 1]
-                prediciton = self._model[ch.translate(self._DIA_TO_NODIA)].predict(self._create_window2(r, text, index))
+                prediciton = self._model[ch.translate(self._DIA_TO_NODIA)].predict(self._create_window(text, index))
                 #prediciton = ch
                 if was_cap:
                     prediciton = prediciton.upper()
@@ -232,14 +200,16 @@ if __name__ == "__main__":
     testing_text = train.data[number:]
 
     # TODO: Train the model.
-    model = Model(train, args)
-    model.train(training_text)
+    # model = Model(train, args)
+    # model.train(training_text)
 
-    # with lzma.open('diacritization.model', "rb") as model_file:
-    #     model = pickle.load(model_file)
 
+    with lzma.open('diacritization.model', "rb") as model_file:
+        model = pickle.load(model_file)
+
+
+    print(len(testing_text))
     result_text = model.predict(testing_text)
-
 
     with open("gold.txt", "w", encoding="utf-8") as gold:
         gold.write(testing_text)
@@ -247,7 +217,7 @@ if __name__ == "__main__":
     with open("system.txt", "w", encoding="utf-8") as system:
         system.write(result_text)
 
-
+    exit()
 
 
 
