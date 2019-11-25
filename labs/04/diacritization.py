@@ -75,7 +75,7 @@ class Net:
             activation='relu',
             batch_size=50,
             alpha=0.005,
-            max_iter=200,
+            max_iter=10,
             verbose=True
         )
         self._inpts = []
@@ -110,7 +110,8 @@ class Net:
         return chr(self._output_to_code_map[output[0]])
 
 class Model:
-    def __init__(self, dataset, args):
+    def __init__(self, dataset, dictionary, args):
+        #self._dictionary = dictionary
         self._args = args
         self._encoder = Encoder(dataset.data, dataset.DIA_TO_NODIA)
         self._model = dict()
@@ -149,6 +150,7 @@ class Model:
         
 
     def train(self, text):
+        #self._count_words(text)
         for index, ch in enumerate(text):
             was_cap = ch.lower() != ch
             ch = ch.lower()
@@ -163,29 +165,89 @@ class Model:
             model.train()
 
 
-    def predict(self, text):
+    def _count_words(self, text):
+        self._counts = {}
+        text = text.split(' ')
+        for i, word  in enumerate(text):
+            no_dia = word.translate(self._DIA_TO_NODIA)
+            if no_dia in self._dictionary.variants.keys():
+                if no_dia not in self._counts:
+                    self._counts[no_dia] = np.zeros(len(self._dictionary.variants[no_dia]))
+
+                for i, pos in enumerate(self._dictionary.variants[no_dia]):
+                        self._counts[no_dia][i] += 1
+                        break
+                    # if i == len(self._counts[no_dia]) - 1:
+                    #     raise Exception('word doesnt exist')
+
+
+    def _pick_substitution(self, word, d):
+        no_dia = word.translate(self._DIA_TO_NODIA)
+        min_error = 123
+        result = str()
+        for candidate in d.variants[no_dia]:
+            error = 0
+            for ch1, ch2  in zip(candidate, word):
+                if  ch1 != ch2:
+                    error += 1
+            if error < min_error:
+                min_error = error
+                result = candidate
+        return result
+
+    def _pick_substitution2(self, word):
+        no_dia = word.translate(self._DIA_TO_NODIA)
+        if no_dia not in self._counts:
+            return self._dictionary.variants[no_dia][0]
+
+        index = self._counts[no_dia].argmax()
+        return self._dictionary.variants[no_dia][index]
+
+
+    def predict(self, text, d):
+        last_word = str()
         r = []
         for index, ch in enumerate(text):
             was_cap = ch.lower() != ch
             ch = ch.lower()
-            if (ch in self._LETTERS_DIA or ch in self._LETTERS_NODIA) \
+
+            # word ended
+            if ch == ' ':
+                last_no_dia = last_word.translate(self._DIA_TO_NODIA)
+                # created unexisting word
+                if last_no_dia in d.variants.keys() and last_word not in d.variants[last_no_dia]:
+                    #print('found mistake')
+                    r = r[:-len(last_word)]
+                    new_word = self._pick_substitution(last_word, d)
+                    #r.extend(dictionary.variants[last_no_dia][0])
+                    r.extend(new_word)
+                last_word = str()
+                r.append(' ')
+            # char with possible dia 
+            elif (ch in self._LETTERS_DIA or ch in self._LETTERS_NODIA) \
             and index >= self._args.window and index < len(text) - self._args.window:
                 #window = text[index - self._args.window : index] + text[index + 1 : index + self._args.window + 1]
                 prediciton = self._model[ch.translate(self._DIA_TO_NODIA)].predict(self._create_window(text, index))
                 #prediciton = ch
                 if was_cap:
                     prediciton = prediciton.upper()
+                last_word += prediciton
                 r.append(prediciton)
 
             else:
                 if was_cap:
                     ch = ch.upper()
+                last_word += ch
                 r.append(ch)
         return ''.join(r)
 
+
+
 if __name__ == "__main__":
     from diacritization import Model, Net, Encoder
+    from diacritization_dictionary import Dictionary
 
+    dictionary = Dictionary()
     args = parser.parse_args()
 
     # Set random seed
@@ -195,29 +257,27 @@ if __name__ == "__main__":
     train = Dataset()
 
 
-    number = len(train.data) // 5 * 4
+    number = len(train.data) 
     training_text = train.data[:number]
     testing_text = train.data[number:]
 
     # TODO: Train the model.
-    # model = Model(train, args)
-    # model.train(training_text)
+    model = Model(train, dictionary, args)
+    model.train(training_text)
 
 
-    with lzma.open('diacritization.model', "rb") as model_file:
-        model = pickle.load(model_file)
+    # with lzma.open('diacritization.model', "rb") as model_file:
+    #     model = pickle.load(model_file)
 
 
     print(len(testing_text))
-    result_text = model.predict(testing_text)
+    result_text = model.predict(testing_text, dictionary)
 
     with open("gold.txt", "w", encoding="utf-8") as gold:
         gold.write(testing_text)
 
     with open("system.txt", "w", encoding="utf-8") as system:
         system.write(result_text)
-
-    exit()
 
 
 
@@ -254,4 +314,6 @@ def recodex_predict(data):
 
     # TODO: Return the predictions as a diacritized `str`. It has to have
     # exactly the same length as `data`.
-    return model.predict(data)
+    from diacritization_dictionary import Dictionary
+    d = Dictionary()
+    return model.predict(data, d)
