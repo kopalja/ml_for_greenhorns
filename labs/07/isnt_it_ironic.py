@@ -10,6 +10,9 @@ import zipfile
 import numpy as np
 
 import sklearn.metrics
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
 
 class Dataset:
     def __init__(self,
@@ -43,8 +46,20 @@ if __name__ == "__main__":
 
     # Load the dataset, downloading it if required
     train = Dataset()
+    vectorizer = CountVectorizer(
+        analyzer='word',
+        lowercase=False,
+        max_features=300
+    )
+
+    model = Pipeline([
+        ('vectorizer', vectorizer),
+        ('RF', RandomForestClassifier(2001, max_depth=6))
+        ]
+    )
 
     # TODO: Train the model.
+    model.fit(train.data, train.target)
 
     # TODO: The trained model needs to be saved. All sklearn models can
     # be serialized and deserialized using the standard `pickle` module.
@@ -73,3 +88,4 @@ def recodex_predict(data):
 
     # TODO: Return the predictions as a Python list or Numpy array of
     # binary labels of the tweets.
+    return model.predict(data)
