@@ -1,69 +1,6 @@
-#!/usr/bin/env python3
-import argparse
-import sys
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
 
-import matplotlib.pyplot as plt
-import numpy as np
-import sklearn.datasets
-import sklearn.metrics
-import sklearn.model_selection
-
-
-
-def model(x, train_data, train_target, a, b):
-    return sum([a[i] * train_target[i] * kernel(train_data[i], x) for i in range(len(a))]) + b
-
-def predict(x):
-    return sum(a[i] * train_target[i] * kernel(train_data[i], x) for i in range(len(a))) + b
-
-
-def decision_function(alphas, target, kernel, X_train, x_test, b):
-    result = (alphas * target) @ kernel(X_train, x_test) - b
-    return result
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--C", default=1, type=float, help="Inverse regularization strenth")
-    parser.add_argument("--examples", default=200, type=int, help="Number of examples")
-    parser.add_argument("--kernel", default="rbf", type=str, help="Kernel type [poly|rbf]")
-    parser.add_argument("--kernel_degree", default=5, type=int, help="Degree for poly kernel")
-    parser.add_argument("--kernel_gamma", default=1.0, type=float, help="Gamma for poly and rbf kernel")
-    parser.add_argument("--num_passes", default=10, type=int, help="Number of passes without changes to stop after")
-    parser.add_argument("--plot", default=True, action="store_true", help="Plot progress")
-    parser.add_argument("--seed", default=42, type=int, help="Random seed")
-    parser.add_argument("--test_ratio", default=0.5, type=float, help="Test set size ratio")
-    parser.add_argument("--tolerance", default=1e-4, type=float, help="Default tolerance for KKT conditions")
-    args = parser.parse_args()
-
-    # Set random seed
-    np.random.seed(args.seed)
-
-    # Generate an artifical regression dataset, with +-1 as targets
-    data, target = sklearn.datasets.make_classification(
-        n_samples=args.examples, n_features=2, n_informative=2, n_redundant=0, random_state=args.seed)
-    target = 2 * target - 1
-
-    # Split the data randomly to train and test using `sklearn.model_selection.train_test_split`,
-    # with `test_size=args.test_ratio` and `random_state=args.seed`.
-    train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(
-        data, target, stratify=target, test_size=args.test_ratio, random_state=args.seed)
-
-    # We consider the following kernels:
-    # - linear: K(x, y) = x^T y
-    # - poly: K(x, y; degree, gamma) = (gamma * x^T y + 1) ^ degree
-    # - rbf: K(x, y; gamma) = exp^{- gamma * ||x - y||^2}
-    def kernel(x, y):
-        if args.kernel == "linear":
-            return x @ y
-        if args.kernel == "poly":
-            return (args.kernel_gamma * x @ y + 1) ** args.kernel_degree
-        if args.kernel == "rbf":
-            return np.exp(-args.kernel_gamma * ((x - y) @ (x - y)))
-
-
-
-
-    # Create initial weights#!/usr/bin/env python3
 import argparse
 import sys
 
@@ -77,8 +14,6 @@ import sklearn.model_selection
 
 def predict(x):
     return sum(a[i] * train_target[i] * kernel(train_data[i], x) for i in range(len(a))) + b
-
-
 
 
 if __name__ == "__main__":
@@ -154,12 +89,15 @@ if __name__ == "__main__":
             # - update a[j] to a_j^new, and compute the updated a[i] and b
             #
             # - increase a_changed
+            E[i] = predict(train_data[i]) - train_target[i]
             if (a[i] < args.C and train_target[i] * E[i] < - args.tolerance) or (a[i] > 0 and train_target[i] * E[i] > args.tolerance):
                 j = j_generator.randint(len(a) - 1)
                 j = j + (j >= i)
+                E[j] = predict(train_data[j]) - train_target[j]
                 k11 = kernel(train_data[i], train_data[i])
                 k12 = kernel(train_data[i], train_data[j])
                 k22 = kernel(train_data[j], train_data[j])
+                k21 = kernel(train_data[j], train_data[i])
                 eta = 2 * k12 - k11 - k22
                 if (eta > -args.tolerance):
                     continue
@@ -174,22 +112,19 @@ if __name__ == "__main__":
                 if (np.abs(a[j] - a_j_new) < args.tolerance):
                     continue
                 a_i_new = a[i] + (train_target[i] * train_target[j]) * (a[j] - a_j_new)
-                b1 = E[i] + train_target[i] * (a_i_new - a[i]) * k11 + train_target[j] * (a_j_new - a[j]) * k12 + b
-                b2 = E[j] + train_target[j] * (a_i_new - a[i]) * k12 + train_target[j] * (a_j_new - a[j]) * k22 + b
+                b_j = b - E[j] - train_target[i] * (a_i_new - a[i]) * k12 - train_target[j] * (a_j_new - a[j]) * k22
+                b_i = b - E[i] - train_target[i] * (a_i_new - a[i]) * k11 - train_target[j] * (a_j_new - a[j]) * k21
                 if 0 < a_i_new and a_i_new < args.C:
-                    b = b1
+                    b = b_i
                 elif 0 < a_j_new and a_j_new < args.C:
-                    b = b2
+                    b = b_j
                 else:
-                    b = (b1 + b2) * 0.5
+                    b = (b_i + b_j) * 0.5
                 a[i] = a_i_new
                 a[j] = a_j_new
                 a_changed += 1
 
         passes = 0 if a_changed else passes + 1
-
-
-
 
 
         # TODO: After each iteration, measure the accuracy for both the
