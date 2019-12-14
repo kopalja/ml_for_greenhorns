@@ -57,6 +57,9 @@ if __name__ == "__main__":
 
 
 
+    print(train_target)
+    exit()
+
 
     # Create initial weights
     a, b = np.zeros(len(train_data)), 0
