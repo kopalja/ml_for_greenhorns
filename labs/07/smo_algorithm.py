@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#dd7e3410-38c0-11e8-9b58-00505601122b
+#6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import sys
 
@@ -10,16 +12,9 @@ import sklearn.model_selection
 
 
 
-def model(x, train_data, train_target, a, b):
-    return sum([a[i] * train_target[i] * kernel(train_data[i], x) for i in range(len(a))]) + b
-
 def predict(x):
     return sum(a[i] * train_target[i] * kernel(train_data[i], x) for i in range(len(a))) + b
 
-
-def decision_function(alphas, target, kernel, X_train, x_test, b):
-    result = (alphas * target) @ kernel(X_train, x_test) - b
-    return result
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -67,7 +62,9 @@ if __name__ == "__main__":
     a, b = np.zeros(len(train_data)), 0
     j_generator = np.random.RandomState(args.seed)
     passes = 0
-    E = np.array([predict(train_data[i]) - train_target[i] for i in range(len(train_data))])
+    E = [predict(train_data[i]) - train_target[i] for i in range(len(train_data))]
+
+    #E = np.array([1 if i > 0 else -1 for i in r])
     #E = [0 for i in range(len(train_data))]
     while passes < args.num_passes:
         a_changed = 0
@@ -92,80 +89,52 @@ if __name__ == "__main__":
             # - update a[j] to a_j^new, and compute the updated a[i] and b
             #
             # - increase a_changed
+            E[i] = predict(train_data[i]) - train_target[i]
             if (a[i] < args.C and train_target[i] * E[i] < - args.tolerance) or (a[i] > 0 and train_target[i] * E[i] > args.tolerance):
                 j = j_generator.randint(len(a) - 1)
                 j = j + (j >= i)
-
-                alph1 = a[i]
-                alph2 = a[j]
-                y1 = train_target[i]
-                y2 = train_target[j]
-                E1 = E[i]
-                E2 = E[j]
-                s = y1 * y2
-
-                L = max(0, alph2 - alph1) if y1 != y2 else max(0, alph1 + alph2 - args.C)
-                H = min(args.C, args.C + alph2 - alph1) if y1 != y2 else  min(args.C, alph1 + alph2)
-
-                if (H - L < args.tolerance):
-                    continue
-
-                # Compute kernel & 2nd derivative eta
+                E[j] = predict(train_data[j]) - train_target[j]
                 k11 = kernel(train_data[i], train_data[i])
                 k12 = kernel(train_data[i], train_data[j])
                 k22 = kernel(train_data[j], train_data[j])
+                k21 = kernel(train_data[j], train_data[i])
                 eta = 2 * k12 - k11 - k22
-
                 if (eta > -args.tolerance):
                     continue
-
-                a2 = alph2 - y2 * (E1 - E2) / eta
-                # Clip a2 based on bounds L & H
-                a2 = min(H, a2)
-                a2 = max(L, a2)
-                
-                # If examples can't be optimized within epsilon (eps), skip this pair
-                if (np.abs(alph2 - a2) < args.tolerance):
-                    #print('small change in apha')
+                L = max(0, a[j] - a[i]) if train_target[i] != train_target[j] else max(0, a[i] + a[j] - args.C)
+                H = min(args.C, args.C + a[j] - a[i]) if train_target[i] != train_target[j] else  min(args.C, a[i] + a[j])
+                if (H - L < args.tolerance):
                     continue
-                
-                # compute alpha1
-                a1 = alph1 + s * (alph2 - a2)
-                
-
-                b1 = E1 + y1 * (a1 - alph1) * k11 + y2 * (a2 - alph2) * k12 + b
-                b2 = E2 + y1 * (a1 - alph1) * k12 + y2 * (a2 - alph2) * k22 + b
-
-                a[i] = a1
-                a[j] = a2
-                if 0 < a1 and a1 < args.C:
-                    b = b1
-                elif 0 < a2 and a2 < args.C:
-                    b = b2
+                # compute a_j
+                a_j_new = a[j] - train_target[j] * (E[i] - E[j]) / eta
+                a_j_new = min(H, a_j_new)
+                a_j_new = max(L, a_j_new)
+                if (np.abs(a[j] - a_j_new) < args.tolerance):
+                    continue
+                a_i_new = a[i] + (train_target[i] * train_target[j]) * (a[j] - a_j_new)
+                b_j = b - E[j] - train_target[i] * (a_i_new - a[i]) * k12 - train_target[j] * (a_j_new - a[j]) * k22
+                b_i = b - E[i] - train_target[i] * (a_i_new - a[i]) * k11 - train_target[j] * (a_j_new - a[j]) * k21
+                if 0 < a_i_new and a_i_new < args.C:
+                    b = b_i
+                elif 0 < a_j_new and a_j_new < args.C:
+                    b = b_j
                 else:
-                    b = (b1 + b2) * 0.5
+                    b = (b_i + b_j) * 0.5
+                a[i] = a_i_new
+                a[j] = a_j_new
                 a_changed += 1
-
-                
 
         passes = 0 if a_changed else passes + 1
 
 
-
-
-
-        results = [predict(example) for example in test_data]
-        results = [1 if r >= 0 else -1  for r in results]
-        train_accuracy = sum([1 if r == t else 0 for r, t in zip(results, test_target)]) / len(results)
-        test_accuracy = train_accuracy
-
-
-        results = [predict(example) for example in train_data]
-        results = [1 if r >= 0 else -1  for r in results]
-        train_accuracy = sum([1 if r == t else 0 for r, t in zip(results, train_target)]) / len(results)
-
         # TODO: After each iteration, measure the accuracy for both the
         #train test and the test set and print it in percentages.
+        predictions = [1 if predict(example) > 0 else -1 for example in train_data]
+        train_accuracy = sum([1 if r == t else 0 for r, t in zip(predictions, train_target)]) / len(predictions)
+
+        predictions = [1 if predict(example) > 0 else -1 for example in test_data]
+        test_accuracy = sum([1 if r == t else 0 for r, t in zip(predictions, test_target)]) / len(predictions)
+
         print("Train acc {:.1f}%, test acc {:.1f}%".format(
             100 * train_accuracy,
             100 * test_accuracy,
@@ -184,84 +153,3 @@ if __name__ == "__main__":
         plt.scatter(test_data[:, 0], test_data[:, 1], c=test_target, marker="*", label="Test", cmap=plt.cm.RdBu, zorder=2)
         plt.legend(loc="upper center", ncol=3)
         plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-                # # from pdf
-                # E[i] = model(train_data[i], train_data, train_target, a, b) - train_target[i]
-                # E[j] = model(train_data[j], train_data, train_target, a, b) - train_target[j]
-
-                # n = kernel(train_data[i], train_data[i]) + kernel(train_data[j], train_data[j]) - 2 * kernel(train_data[i], train_data[j])
-                # a_j_new = a[j] + train_target[j] * (E[i] - E[j]) / n
-
-                # L = max(0, a[j] - a[i]) if train_target[i] != train_target[j] else max(0, a[j] + a[i] - args.C)
-                # H = min(args.C, args.C + a[j] - a[i]) if train_target[i] != train_target[j] else min(args.C, a[j] + a[i])
-                
-                # a_j_new = min(a_j_new, H)
-                # a_j_new = max(a_j_new, L)
-
-                # s = train_target[i] * train_target[j]
-                # a_i_new = a[i] + s * (a[j] - a_j_new)
-
-                # #print('before')
-                # # print(n)
-                # # if (n >= - args.tolerance) or (H - L < args.tolerance) or (abs(a_j_new - a[j]) < args.tolerance):
-                # #     continue
-                # # print('update')
-                # # b 1 = E 1 + y 1 ( α 1 new − α 1 ) K ( x 1 , x 1 ) + y 2 ( α 2 new,clipped − α 2 ) K ( x 1 , x 2 ) + b .
-                # x = (E[i])
-                # print(x)
-                # b1 = int(E[i] + train_target[i] * (a_i_new - a[i]) * kernel(train_data[i], train_data[i]) + \
-                #               train_target[j] * (a_j_new - a[j]) * kernel(train_data[i], train_data[j]) + b)
-
-                # b2 = E[j] + train_target[i] * (a_i_new - a[i]) * kernel(train_data[i], train_data[j]) + \
-                #               train_target[j] * (a_j_new - a[j]) * kernel(train_data[j], train_data[j]) + b
-
-                # b = (b2 + b1) / 2
-                # a[j] = a_j_new
-                # a[i] = a_i_new
-                # a_changed += 1
-
-
-
-
-
-                # if (y1 != y2):
-                #     L = max(0, alph2 - alph1)
-                #     H = min(args.C, args.C + alph2 - alph1)
-                # elif (y1 == y2):
-                #     L = max(0, alph1 + alph2 - args.C)
-                #     H = min(args.C, alph1 + alph2)
-
-                # if L < a2 < H:
-                #     a2 = a2
-                # elif (a2 <= L):
-                #     a2 = L
-                # elif (a2 >= H):
-                #     a2 = H
-
-
-
-                
-                # Update error cache
-                # Error cache for optimized alphas is set to 0 if they're unbound
-                # for index, alph in zip([i, j], [a1, a2]):
-                #     if 0.0 < alph < args.C:
-                #         E[index] = 0.0
-                
-                # # Set non-optimized errors based on equation 12.11 in Platt's book
-                # non_opt = [n for n in range(len(train_data)) if (n != i and n != j)]
-                # E[non_opt] = E[non_opt] + \
-                #                         y1*(a1 - alph1)*kernel(E[i], E[non_opt]) + \
-                #                         y2*(a2 - alph2)*kernel(E[j], E[non_opt]) + b - b_new
-                
-                # Update model threshold
